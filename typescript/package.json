@@ -1,0 +1,23 @@
+{
+  "name": "promptpack",
+  "version": "0.1.0",
+  "description": "Pack JSON data into token-efficient CSV for LLM prompts. Save 40-62% on input tokens.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test tests/core.test.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["llm", "tokens", "csv", "json", "prompt", "optimization", "openai", "anthropic", "gpt", "claude"],
+  "author": "Yashwanth",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yashwanth9394/promptpack"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

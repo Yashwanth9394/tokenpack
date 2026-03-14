@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+node_modules/
+*.js
+!benchmarks/*.py
+*.d.ts
+.env
+*.class
+target/
+.idea/
+*.iml
