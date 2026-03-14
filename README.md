@@ -15,18 +15,32 @@ promptpack auto-detects your data shape, converts JSON arrays to CSV (which ever
 ## Install
 
 ```bash
-# Python
-pip install promptpack
+pip install promptpack          # Python
+npm install promptpack          # Node.js / TypeScript
+gem install promptpack          # Ruby
+composer require yashwanth/promptpack  # PHP
+go get github.com/Yashwanth9394/promptpack/go  # Go
+cargo add promptpack            # Rust
+dotnet add package PromptPack   # C# / .NET
+```
 
-# Node.js
-npm install promptpack
-
-# Java (Maven)
+```xml
+<!-- Java (Maven) -->
 <dependency>
     <groupId>com.promptpack</groupId>
     <artifactId>promptpack</artifactId>
     <version>0.1.0</version>
 </dependency>
+```
+
+```kotlin
+// Kotlin (Gradle)
+implementation("com.promptpack:promptpack:0.1.0")
+```
+
+```swift
+// Swift (Package.swift)
+.package(url: "https://github.com/Yashwanth9394/promptpack", from: "0.1.0")
 ```
 
 ## Usage
@@ -116,6 +130,86 @@ String packed = PromptPack.pack(json);              // JSON → CSV
 JsonArray original = PromptPack.unpack(packed);      // CSV → JSON
 
 String prompt = PromptPack.packForPrompt("Analyze:", json);
+```
+
+### Go
+
+```go
+import "github.com/Yashwanth9394/promptpack/go"
+
+data := []map[string]interface{}{
+    {"name": "Yash", "role": "Eng"},
+    {"name": "Ali", "role": "Des"},
+}
+
+packed := promptpack.Pack(data)          // JSON → CSV
+original := promptpack.Unpack(packed)    // CSV → JSON
+prompt := promptpack.PackForPrompt("Analyze:", data)
+```
+
+### Rust
+
+```rust
+use promptpack::{pack, unpack};
+use serde_json::json;
+
+let data = json!([{"name": "Yash", "role": "Eng"}, {"name": "Ali", "role": "Des"}]);
+
+let packed = pack(&data);               // JSON → CSV
+let original = unpack(&packed);          // CSV → JSON
+```
+
+### C# / .NET
+
+```csharp
+using PromptPack;
+
+string json = "[{\"name\":\"Yash\",\"role\":\"Eng\"},{\"name\":\"Ali\",\"role\":\"Des\"}]";
+
+string packed = PromptPack.Pack(json);
+JsonElement original = PromptPack.Unpack(packed);
+```
+
+### Ruby
+
+```ruby
+require 'promptpack'
+
+data = [{ "name" => "Yash", "role" => "Eng" }, { "name" => "Ali", "role" => "Des" }]
+
+packed = PromptPack.pack(data)           # JSON → CSV
+original = PromptPack.unpack(packed)     # CSV → JSON
+```
+
+### PHP
+
+```php
+use PromptPack\PromptPack;
+
+$data = [["name" => "Yash", "role" => "Eng"], ["name" => "Ali", "role" => "Des"]];
+
+$packed = PromptPack::pack($data);       // JSON → CSV
+$original = PromptPack::unpack($packed); // CSV → JSON
+```
+
+### Kotlin
+
+```kotlin
+import com.promptpack.PromptPack
+
+val packed = PromptPack.pack("""[{"name":"Yash","role":"Eng"},{"name":"Ali","role":"Des"}]""")
+val original = PromptPack.unpack(packed)
+```
+
+### Swift
+
+```swift
+import PromptPack
+
+let data: [[String: Any]] = [["name": "Yash", "role": "Eng"], ["name": "Ali", "role": "Des"]]
+
+let packed = PromptPack.pack(data)       // JSON → CSV
+let original = PromptPack.unpack(packed) // CSV → JSON
 ```
 
 ## Benchmarks
@@ -229,28 +323,51 @@ PromptPack.unpack(String text): JsonArray
 PromptPack.packForPrompt(String message, String json): String
 ```
 
+## Supported Languages
+
+| Language | Package Manager | Directory |
+|----------|----------------|-----------|
+| Python | pip | `python/` |
+| TypeScript | npm | `typescript/` |
+| Java | Maven | `java/` |
+| Go | go modules | `go/` |
+| Rust | cargo | `rust/` |
+| C# / .NET | NuGet | `csharp/` |
+| Ruby | gem | `ruby/` |
+| PHP | composer | `php/` |
+| Kotlin | Gradle | `kotlin/` |
+| Swift | SwiftPM | `swift/` |
+
 ## Project Structure
 
 ```
 promptpack/
-├── python/                 # Python package (pip)
+├── python/                 # pip install promptpack
 │   ├── promptpack/
-│   │   ├── __init__.py
-│   │   └── core.py         # Core pack/unpack logic
-│   ├── tests/
-│   │   └── test_core.py    # 37 tests covering all edge cases
-│   └── pyproject.toml
-├── typescript/             # TypeScript package (npm)
-│   ├── src/
-│   │   └── index.ts        # Full port with CSV parser
-│   ├── package.json
-│   └── tsconfig.json
-├── java/                   # Java package (Maven)
-│   ├── src/main/java/com/promptpack/
-│   │   └── PromptPack.java
-│   └── pom.xml
+│   │   ├── core.py         # Core pack/unpack logic
+│   │   └── wrappers.py     # OpenAI/Anthropic 1-line wrappers
+│   └── tests/test_core.py  # 37 tests covering all edge cases
+├── typescript/             # npm install promptpack
+│   └── src/index.ts
+├── java/                   # Maven
+│   └── src/.../PromptPack.java
+├── go/                     # go get
+│   ├── promptpack.go
+│   └── promptpack_test.go  # 16 tests
+├── rust/                   # cargo add promptpack
+│   └── src/lib.rs          # 12 tests
+├── csharp/                 # dotnet add package PromptPack
+│   └── PromptPack.cs
+├── ruby/                   # gem install promptpack
+│   └── lib/promptpack.rb
+├── php/                    # composer require
+│   └── src/PromptPack.php
+├── kotlin/                 # Gradle
+│   └── src/.../PromptPack.kt
+├── swift/                  # SwiftPM
+│   └── Sources/PromptPack/PromptPack.swift
 ├── benchmarks/
-│   └── benchmark.py        # Token count benchmarks
+│   └── benchmark.py
 └── README.md
 ```
 

@@ -1,0 +1,14 @@
+{
+    "name": "yashwanth/promptpack",
+    "description": "Pack JSON data into token-efficient CSV for LLM prompts",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "PromptPack\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=7.4"
+    }
+}

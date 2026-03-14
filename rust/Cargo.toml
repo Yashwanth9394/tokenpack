@@ -1,0 +1,10 @@
+[package]
+name = "promptpack"
+version = "0.1.0"
+edition = "2021"
+description = "Convert JSON arrays of objects into CSV format to save LLM tokens"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+csv = "1"
