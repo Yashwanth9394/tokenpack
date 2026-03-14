@@ -1,6 +1,6 @@
 # promptpack
 
-Pack JSON data into token-efficient formats for LLM prompts. **Save 40-62% on input tokens** with zero learning curve.
+Pack JSON data into token-efficient formats for LLM prompts. **Save 37-47% on input tokens** with zero learning curve.
 
 ```
 JSON (115 tokens)                         CSV (66 tokens) — 43% savings
@@ -129,7 +129,15 @@ String json = "[{\"name\":\"Yash\",\"role\":\"Eng\"},{\"name\":\"Ali\",\"role\":
 String packed = PromptPack.pack(json);              // JSON → CSV
 JsonArray original = PromptPack.unpack(packed);      // CSV → JSON
 
-String prompt = PromptPack.packForPrompt("Analyze:", json);
+// 1-line integration with any LLM SDK:
+var response = PromptPack.withPacked("Analyze:", json, content ->
+    client.chat().completions().create(
+        ChatCompletionCreateParams.builder()
+            .model(ChatModel.GPT_4O)
+            .addUserMessage(content)
+            .build()
+    )
+);
 ```
 
 ### Go
@@ -248,9 +256,9 @@ promptpack looks at your data and picks the best strategy:
 
 | Data shape | Strategy | Savings |
 |-----------|----------|---------|
-| Array of objects `[{}, {}]` | Straight CSV | 40-47% |
-| Nested objects `{address: {city}}` | Dot-flatten: `address.city` | 44-62% |
-| Array of primitives `{skills: ["A","B"]}` | Pipe-join: `A\|B` | 36-52% |
+| Array of objects `[{}, {}]` | Pure CSV | 39-47% |
+| Nested objects `{address: {city}}` | Dot-flatten: `address.city` | 44-47% |
+| Array of primitives `{skills: ["A","B"]}` | Pipe-join: `A\|B` | 37-47% |
 | Single object / config | Keep JSON (not worth converting) | 0% |
 | Small data (< 2 rows) | Keep JSON (overhead > savings) | 0% |
 | Non-uniform objects (0% shared keys) | Keep JSON (can't make safe CSV) | 0% |
@@ -279,8 +287,9 @@ CSV beats TOON while being universally understood by LLMs (billions of CSV examp
 | Values with spaces (`Yash P`) | Works naturally in CSV |
 | Null / missing values | Empty cell between commas |
 | Boolean values | `true` / `false` |
+| Keys with dots (`"config.name"`) | Escaped dot-notation (`config\.name`) |
 | Nested objects | Dot-notation flattening |
-| Arrays of primitives | Pipe-joined (`Python\|Java`) |
+| Arrays of primitives | Pipe-joined with escaping (`Python\|Java`) |
 | Unicode / emoji | Pass-through |
 | Non-uniform objects | Superset headers + empty cells |
 | Deeply nested (3+ levels) | Recursive dot-flatten (`a.b.c`) |
@@ -288,10 +297,14 @@ CSV beats TOON while being universally understood by LLMs (billions of CSV examp
 
 ## Known Limitations
 
-| Limitation | Impact | Workaround |
-|-----------|--------|------------|
-| Numeric strings (`"10001"`) unpack as numbers | Low — LLMs understand both | Use for LLM input only, not as a database serializer |
-| Empty string vs null indistinguishable | Low — both become empty CSV cell | Acceptable for LLM context |
+`pack()` outputs **pure standard CSV** — the LLM reads it perfectly. These limitations only affect `unpack()` (reversing CSV back to JSON):
+
+| Limitation | Impact | Fix |
+|-----------|--------|-----|
+| Numeric strings (`"10001"`) unpack as numbers | Low — LLMs understand both | Use `pack(data, typed=True)` for safe round-trip |
+| String `"true"`/`"false"` unpack as booleans | Low — LLMs understand both | Use `pack(data, typed=True)` |
+| String with `\|` unpacks as array | Low — rare in real data | Use `pack(data, typed=True)` |
+| Empty string vs null indistinguishable | Low — both become empty CSV cell | Use `pack(data, typed=True)` (uses `\N` sentinel) |
 | Nested arrays of objects | Falls back to JSON-in-cell | Still works, just less savings for that column |
 
 ## API Reference
@@ -299,19 +312,29 @@ CSV beats TOON while being universally understood by LLMs (billions of CSV examp
 ### Python
 
 ```python
-pack(data)                    # JSON-compatible data → packed string
-unpack(text)                  # Packed string → JSON-compatible data
-pack_for_prompt(msg, data)    # Combine message + packed data
-estimate_savings(data)        # Get savings estimate dict
+pack(data)                           # JSON → pure CSV (for LLM input)
+pack(data, typed=True)               # JSON → CSV + type hints (for safe round-trip)
+unpack(text)                         # CSV or JSON → Python objects
+pack_for_prompt(msg, data)           # Combine message + packed data
+estimate_savings(data)               # Get savings estimate dict
+
+# 1-line SDK wrappers
+from promptpack.wrappers import openai_pack, anthropic_pack
+openai_pack(client, msg, data)       # Auto-pack + send to OpenAI
+anthropic_pack(client, msg, data)    # Auto-pack + send to Anthropic
 ```
 
 ### TypeScript
 
 ```typescript
-pack(data: unknown): string
+pack(data: unknown, typed?: boolean): string  // typed=false → pure CSV, typed=true → with type hints
 unpack(text: string): unknown
 packForPrompt(message: string, data: unknown): string
 estimateSavings(data: unknown): { jsonChars, packedChars, charSavingsPct, formatUsed }
+
+// 1-line SDK wrappers
+openaiPack(client, message, data): Promise<unknown>
+anthropicPack(client, message, data): Promise<unknown>
 ```
 
 ### Java
@@ -321,6 +344,7 @@ PromptPack.pack(String json): String
 PromptPack.pack(JsonElement element): String
 PromptPack.unpack(String text): JsonArray
 PromptPack.packForPrompt(String message, String json): String
+PromptPack.withPacked(String message, String json, Function<String, T> caller): T  // 1-line SDK wrapper
 ```
 
 ## Supported Languages

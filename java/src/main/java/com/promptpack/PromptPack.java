@@ -3,6 +3,7 @@ package com.promptpack;
 import com.google.gson.*;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -12,6 +13,11 @@ import java.util.stream.Collectors;
  * String csv = PromptPack.pack(jsonArray);       // JSON → CSV (fewer tokens)
  * JsonArray arr = PromptPack.unpack(csv);         // CSV → JSON (back to original)
  * String prompt = PromptPack.packForPrompt("Analyze:", jsonArray);
+ *
+ * // 1-line integration with any LLM SDK:
+ * var response = PromptPack.withPacked("Analyze:", data, content -&gt;
+ *     client.chat().completions().create(params.addUserMessage(content).build())
+ * );
  * </pre>
  */
 public final class PromptPack {
@@ -75,6 +81,52 @@ public final class PromptPack {
         return message + "\n" + pack(element);
     }
 
+    /**
+     * 1-line integration with any LLM SDK. Packs the data and passes
+     * the combined prompt to your SDK caller function.
+     *
+     * <pre>
+     * // OpenAI Java SDK:
+     * var response = PromptPack.withPacked("Analyze:", jsonData, content -&gt;
+     *     client.chat().completions().create(
+     *         ChatCompletionCreateParams.builder()
+     *             .model(ChatModel.GPT_4O)
+     *             .addUserMessage(content)
+     *             .build()
+     *     )
+     * );
+     *
+     * // Anthropic Java SDK:
+     * var response = PromptPack.withPacked("Analyze:", jsonData, content -&gt;
+     *     client.messages().create(
+     *         MessageCreateParams.builder()
+     *             .model(Model.CLAUDE_SONNET_4_20250514)
+     *             .maxTokens(1024)
+     *             .addUserMessage(content)
+     *             .build()
+     *     )
+     * );
+     * </pre>
+     *
+     * @param message  The instruction/message to prepend
+     * @param json     The JSON data to pack
+     * @param caller   A function that receives the packed prompt and calls your LLM SDK
+     * @param <T>      The return type from your SDK call
+     * @return The result from the SDK call
+     */
+    public static <T> T withPacked(String message, String json, Function<String, T> caller) {
+        String packed = packForPrompt(message, json);
+        return caller.apply(packed);
+    }
+
+    /**
+     * 1-line integration with any LLM SDK (JsonElement overload).
+     */
+    public static <T> T withPacked(String message, JsonElement element, Function<String, T> caller) {
+        String packed = packForPrompt(message, element);
+        return caller.apply(packed);
+    }
+
     // -----------------------------------------------------------------------
     // Internal: shape detection
     // -----------------------------------------------------------------------
@@ -119,8 +171,65 @@ public final class PromptPack {
     }
 
     // -----------------------------------------------------------------------
+    // Internal: key/pipe escaping
+    // -----------------------------------------------------------------------
+
+    private static String escapeKey(String key) {
+        return key.replace("\\", "\\\\").replace(".", "\\.");
+    }
+
+    private static List<String> splitDottedKey(String key) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int i = 0;
+        while (i < key.length()) {
+            if (key.charAt(i) == '\\' && i + 1 < key.length()) {
+                current.append(key.charAt(i + 1));
+                i += 2;
+            } else if (key.charAt(i) == '.') {
+                parts.add(current.toString());
+                current.setLength(0);
+                i += 1;
+            } else {
+                current.append(key.charAt(i));
+                i += 1;
+            }
+        }
+        parts.add(current.toString());
+        return parts;
+    }
+
+    private static String escapePipe(String s) {
+        return s.replace("\\", "\\\\").replace("|", "\\|");
+    }
+
+    private static List<String> splitPipeJoined(String raw) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int i = 0;
+        while (i < raw.length()) {
+            if (raw.charAt(i) == '\\' && i + 1 < raw.length()) {
+                current.append(raw.charAt(i + 1));
+                i += 2;
+            } else if (raw.charAt(i) == '|') {
+                parts.add(current.toString());
+                current.setLength(0);
+                i += 1;
+            } else {
+                current.append(raw.charAt(i));
+                i += 1;
+            }
+        }
+        parts.add(current.toString());
+        return parts;
+    }
+
+    // -----------------------------------------------------------------------
     // Internal: JSON → CSV
     // -----------------------------------------------------------------------
+
+    // Track which values came from pipe-joining (for type detection)
+    private static final String PIPE_JOINED_MARKER = "\u0000__PP_PIPE__";
 
     private static String toCsv(JsonArray arr) {
         List<Map<String, String>> flatRows = new ArrayList<>();
@@ -136,13 +245,31 @@ public final class PromptPack {
         }
         List<String> headers = new ArrayList<>(headerSet);
 
+        // Detect column types
+        List<String> colTypes = new ArrayList<>();
+        for (String header : headers) {
+            colTypes.add(detectColumnType(flatRows, header, arr, headers));
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.append(csvLine(headers));
+
+        // Type hints row
+        sb.append('\n');
+        sb.append('#');
+        sb.append(String.join(",", colTypes));
 
         for (Map<String, String> row : flatRows) {
             sb.append('\n');
             List<String> values = headers.stream()
-                    .map(h -> row.getOrDefault(h, ""))
+                    .map(h -> {
+                        String v = row.getOrDefault(h, "");
+                        // Remove pipe-joined marker before writing
+                        if (v.startsWith(PIPE_JOINED_MARKER)) {
+                            return v.substring(PIPE_JOINED_MARKER.length());
+                        }
+                        return v;
+                    })
                     .collect(Collectors.toList());
             sb.append(csvLine(values));
         }
@@ -150,9 +277,71 @@ public final class PromptPack {
         return sb.toString();
     }
 
+    private static String detectColumnType(List<Map<String, String>> flatRows, String header,
+                                           JsonArray originalArr, List<String> headers) {
+        // Check if any value in this column was pipe-joined
+        boolean hasPipeJoined = false;
+        Set<String> typesSeen = new HashSet<>();
+
+        for (Map<String, String> row : flatRows) {
+            String val = row.get(header);
+            if (val == null || val.isEmpty()) continue;
+
+            if (val.startsWith(PIPE_JOINED_MARKER)) {
+                hasPipeJoined = true;
+                continue;
+            }
+
+            // Check original JSON types by trying to determine from the formatted value
+            // We need to check original data types
+        }
+
+        if (hasPipeJoined) return "a";
+
+        // Check original JSON element types for this column
+        for (JsonElement item : originalArr) {
+            if (!item.isJsonObject()) continue;
+            JsonObject obj = item.getAsJsonObject();
+
+            // Navigate to the value using the header (which may be dot-notated)
+            JsonElement val = resolveNestedValue(obj, header);
+            if (val == null || val.isJsonNull()) continue;
+
+            if (val.isJsonPrimitive()) {
+                JsonPrimitive p = val.getAsJsonPrimitive();
+                if (p.isBoolean()) typesSeen.add("b");
+                else if (p.isNumber()) typesSeen.add("n");
+                else typesSeen.add("s");
+            } else if (val.isJsonArray()) {
+                typesSeen.add("a");
+            } else {
+                typesSeen.add("j");
+            }
+        }
+
+        if (typesSeen.size() == 1) return typesSeen.iterator().next();
+        if (typesSeen.contains("s")) return "s";
+        if (typesSeen.isEmpty()) return "x";
+        return "x";
+    }
+
+    private static JsonElement resolveNestedValue(JsonObject obj, String header) {
+        // The header might be dot-escaped. Parse it to find the right value.
+        List<String> parts = splitDottedKey(header);
+        JsonElement current = obj;
+        for (int i = 0; i < parts.size(); i++) {
+            if (current == null || !current.isJsonObject()) return null;
+            current = current.getAsJsonObject().get(parts.get(i));
+        }
+        return current;
+    }
+
     private static Map<String, String> flattenRow(JsonObject obj) {
         Map<String, String> flat = new LinkedHashMap<>();
-        flattenValue(obj, "", flat);
+        for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+            String escapedKey = escapeKey(entry.getKey());
+            flattenValue(entry.getValue(), escapedKey, flat);
+        }
         return flat;
     }
 
@@ -160,7 +349,8 @@ public final class PromptPack {
         if (value.isJsonObject()) {
             JsonObject obj = value.getAsJsonObject();
             for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                String key = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
+                String escapedKey = escapeKey(entry.getKey());
+                String key = prefix.isEmpty() ? escapedKey : prefix + "." + escapedKey;
                 flattenValue(entry.getValue(), key, out);
             }
         } else if (value.isJsonArray()) {
@@ -173,12 +363,13 @@ public final class PromptPack {
                 }
             }
             if (allPrimitive) {
-                // Pipe-join primitives
+                // Pipe-join primitives with escaping
                 StringJoiner sj = new StringJoiner("|");
                 for (JsonElement el : arr) {
-                    sj.add(formatCell(el));
+                    sj.add(escapePipe(formatCell(el)));
                 }
-                out.put(prefix, sj.toString());
+                // Mark as pipe-joined for type detection
+                out.put(prefix, PIPE_JOINED_MARKER + sj.toString());
             } else {
                 // Fallback: JSON string in cell
                 out.put(prefix, GSON.toJson(arr));
@@ -226,16 +417,35 @@ public final class PromptPack {
         if (lines.size() < 2) return new JsonArray();
 
         List<String> headers = lines.get(0);
+
+        // Check for type hints row
+        List<String> colTypes = null;
+        int dataStartIdx = 1;
+
+        if (lines.size() > 1) {
+            List<String> maybeTypes = lines.get(1);
+            if (!maybeTypes.isEmpty() && maybeTypes.get(0).startsWith("#")) {
+                // Type hints: CSV parser splits "#s,n,a,b" into ["#s", "n", "a", "b"]
+                colTypes = new ArrayList<>();
+                colTypes.add(maybeTypes.get(0).substring(1));
+                for (int i = 1; i < maybeTypes.size(); i++) {
+                    colTypes.add(maybeTypes.get(i));
+                }
+                dataStartIdx = 2;
+            }
+        }
+
         JsonArray result = new JsonArray();
 
-        for (int i = 1; i < lines.size(); i++) {
+        for (int i = dataStartIdx; i < lines.size(); i++) {
             List<String> row = lines.get(i);
             if (row.stream().allMatch(String::isEmpty)) continue;
 
             Map<String, JsonElement> flat = new LinkedHashMap<>();
             for (int j = 0; j < headers.size(); j++) {
                 String raw = j < row.size() ? row.get(j) : "";
-                flat.put(headers.get(j), parseCell(raw));
+                String typeHint = colTypes != null && j < colTypes.size() ? colTypes.get(j) : null;
+                flat.put(headers.get(j), parseCell(raw, typeHint));
             }
 
             result.add(unflatten(flat));
@@ -244,35 +454,64 @@ public final class PromptPack {
         return result;
     }
 
-    private static JsonElement parseCell(String raw) {
+    private static JsonElement parseCell(String raw, String typeHint) {
+        if (raw.isEmpty()) return JsonNull.INSTANCE;
+
+        // Type-hinted parsing (safe round-trip)
+        if ("s".equals(typeHint)) return new JsonPrimitive(raw);
+        if ("b".equals(typeHint)) return new JsonPrimitive("true".equals(raw));
+        if ("n".equals(typeHint)) {
+            try {
+                if (raw.contains(".")) return new JsonPrimitive(Double.parseDouble(raw));
+                return new JsonPrimitive(Long.parseLong(raw));
+            } catch (NumberFormatException e) {
+                return new JsonPrimitive(raw);
+            }
+        }
+        if ("a".equals(typeHint)) {
+            JsonArray arr = new JsonArray();
+            for (String part : splitPipeJoined(raw)) {
+                arr.add(parseArrayElement(part));
+            }
+            return arr;
+        }
+        if ("j".equals(typeHint)) {
+            try {
+                return JsonParser.parseString(raw);
+            } catch (JsonSyntaxException e) {
+                return new JsonPrimitive(raw);
+            }
+        }
+
+        // No type hint — auto-detect (backward compat)
+        return parseCellAutoDetect(raw);
+    }
+
+    private static JsonElement parseCellAutoDetect(String raw) {
         if (raw.isEmpty()) return JsonNull.INSTANCE;
         if ("true".equals(raw)) return new JsonPrimitive(true);
         if ("false".equals(raw)) return new JsonPrimitive(false);
 
-        // Try integer
         if (raw.matches("-?\\d+")) {
             try {
                 return new JsonPrimitive(Long.parseLong(raw));
             } catch (NumberFormatException ignored) {}
         }
 
-        // Try float
         if (raw.matches("-?\\d+\\.\\d+")) {
             try {
                 return new JsonPrimitive(Double.parseDouble(raw));
             } catch (NumberFormatException ignored) {}
         }
 
-        // Pipe-separated array
         if (raw.contains("|") && !raw.startsWith("[")) {
             JsonArray arr = new JsonArray();
             for (String part : raw.split("\\|", -1)) {
-                arr.add(parseCell(part));
+                arr.add(parseArrayElement(part));
             }
             return arr;
         }
 
-        // Embedded JSON
         if (raw.startsWith("[") || raw.startsWith("{")) {
             try {
                 return JsonParser.parseString(raw);
@@ -282,18 +521,38 @@ public final class PromptPack {
         return new JsonPrimitive(raw);
     }
 
+    private static JsonElement parseArrayElement(String raw) {
+        if (raw.isEmpty()) return JsonNull.INSTANCE;
+        if ("true".equals(raw)) return new JsonPrimitive(true);
+        if ("false".equals(raw)) return new JsonPrimitive(false);
+
+        if (raw.matches("-?\\d+")) {
+            try {
+                return new JsonPrimitive(Long.parseLong(raw));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (raw.matches("-?\\d+\\.\\d+")) {
+            try {
+                return new JsonPrimitive(Double.parseDouble(raw));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        return new JsonPrimitive(raw);
+    }
+
     private static JsonObject unflatten(Map<String, JsonElement> flat) {
         JsonObject result = new JsonObject();
         for (Map.Entry<String, JsonElement> entry : flat.entrySet()) {
-            String[] parts = entry.getKey().split("\\.");
+            List<String> parts = splitDottedKey(entry.getKey());
             JsonObject current = result;
-            for (int i = 0; i < parts.length - 1; i++) {
-                if (!current.has(parts[i]) || !current.get(parts[i]).isJsonObject()) {
-                    current.add(parts[i], new JsonObject());
+            for (int i = 0; i < parts.size() - 1; i++) {
+                if (!current.has(parts.get(i)) || !current.get(parts.get(i)).isJsonObject()) {
+                    current.add(parts.get(i), new JsonObject());
                 }
-                current = current.getAsJsonObject(parts[i]);
+                current = current.getAsJsonObject(parts.get(i));
             }
-            current.add(parts[parts.length - 1], entry.getValue());
+            current.add(parts.get(parts.size() - 1), entry.getValue());
         }
         return result;
     }

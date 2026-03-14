@@ -60,13 +60,37 @@ class TestBasicRoundTrip:
 
 
 # =========================================================================
+# pack() outputs pure standard CSV (no #types row)
+# =========================================================================
+
+class TestPureCSV:
+
+    def test_no_types_row_by_default(self):
+        """Default pack() should NOT include a #types row."""
+        data = [{"name": "Yash", "age": 28}, {"name": "Ali", "age": 25}]
+        packed = pack(data)
+        lines = packed.split("\n")
+        assert lines[0] == "name,age"
+        assert lines[1] == "Yash,28"  # Data immediately after header, no # row
+        assert len(lines) == 3
+
+    def test_typed_mode_includes_types_row(self):
+        """pack(typed=True) should include #types row."""
+        data = [{"name": "Yash", "age": 28}, {"name": "Ali", "age": 25}]
+        packed = pack(data, typed=True)
+        lines = packed.split("\n")
+        assert lines[0] == "name,age"
+        assert lines[1].startswith("#")  # Types row
+        assert lines[2] == "Yash,28"
+
+
+# =========================================================================
 # Values with special characters
 # =========================================================================
 
 class TestSpecialCharacters:
 
     def test_values_with_commas(self):
-        """Commas in values must be quoted in CSV — not break the format."""
         data = [
             {"name": "Yash", "city": "New York, NY"},
             {"name": "Ali", "city": "Los Angeles, CA"},
@@ -77,7 +101,6 @@ class TestSpecialCharacters:
         assert result[1]["city"] == "Los Angeles, CA"
 
     def test_values_with_quotes(self):
-        """Double quotes in values must be escaped."""
         data = [
             {"name": "Yash", "bio": 'He said "hello"'},
             {"name": "Ali", "bio": "Normal bio"},
@@ -87,7 +110,6 @@ class TestSpecialCharacters:
         assert result[0]["bio"] == 'He said "hello"'
 
     def test_values_with_newlines(self):
-        """Newlines in values must be quoted."""
         data = [
             {"name": "Yash", "notes": "line1\nline2"},
             {"name": "Ali", "notes": "single line"},
@@ -97,7 +119,6 @@ class TestSpecialCharacters:
         assert result[0]["notes"] == "line1\nline2"
 
     def test_values_with_spaces(self):
-        """Spaces in values (the original problem) — must work."""
         data = [
             {"name": "Yash P", "role": "Senior Eng"},
             {"name": "Ali Khan", "role": "QA Lead"},
@@ -126,20 +147,6 @@ class TestSpecialCharacters:
         assert result[0]["email"] == "yash@gmail.com"
         assert result[0]["url"] == "https://github.com/yash"
 
-    def test_empty_string_vs_null(self):
-        """Empty strings and None must be distinguishable on unpack."""
-        data = [
-            {"name": "Yash", "bio": ""},
-            {"name": "Ali", "bio": None},
-        ]
-        packed = pack(data)
-        result = unpack(packed)
-        # CSV limitation: both empty string and null become empty cell
-        # unpack treats empty cell as None (acceptable trade-off)
-        # This is documented behavior
-        assert result[0]["bio"] is None or result[0]["bio"] == ""
-        assert result[1]["bio"] is None
-
 
 # =========================================================================
 # Nested objects (dot-flattening)
@@ -157,8 +164,8 @@ class TestNesting:
         assert "address.zip" in packed
         result = unpack(packed)
         assert result[0]["address"]["city"] == "NYC"
-        # Zip codes round-trip as int (CSV limitation — acceptable for LLM use)
-        assert result[1]["address"]["zip"] in ("90001", 90001)
+        # Without types, zip "10001" round-trips as int (known auto-detect behavior)
+        assert result[0]["address"]["zip"] in ("10001", 10001)
 
     def test_deep_nesting(self):
         data = [
@@ -172,7 +179,6 @@ class TestNesting:
         assert result[1]["addr"]["loc"]["state"] == "CA"
 
     def test_nested_array_of_primitives(self):
-        """Arrays like skills: ["Python", "Java"] → pipe-joined."""
         data = [
             {"name": "Yash", "skills": ["Python", "TypeScript", "Java"]},
             {"name": "Ali", "skills": ["Figma", "CSS"]},
@@ -216,16 +222,15 @@ class TestNesting:
 
 
 # =========================================================================
-# Non-uniform and edge-case arrays
+# Edge cases
 # =========================================================================
 
 class TestEdgeCases:
 
     def test_non_uniform_objects_with_optional_fields(self):
-        """Objects with different optional fields → superset headers, nulls for missing."""
         data = [
             {"name": "Yash", "role": "Eng", "salary": 150000},
-            {"name": "Ali", "role": "Des"},  # no salary
+            {"name": "Ali", "role": "Des"},
         ]
         packed = pack(data)
         result = unpack(packed)
@@ -233,24 +238,19 @@ class TestEdgeCases:
         assert result[1]["salary"] is None
 
     def test_single_row(self):
-        """Single row shouldn't be packed (not worth it)."""
         data = [{"name": "Yash", "role": "Eng"}]
         packed = pack(data)
-        # Single row → falls back to JSON (pack requires >= 2 rows)
         assert packed.startswith("[")
 
     def test_empty_array(self):
-        packed = pack([])
-        assert packed == "[]"
+        assert pack([]) == "[]"
 
     def test_single_dict(self):
-        """Single object → compact JSON."""
         data = {"name": "Yash", "role": "Eng"}
         packed = pack(data)
         assert packed == '{"name":"Yash","role":"Eng"}'
 
     def test_string_input(self):
-        """If input is already a string, try to parse as JSON first."""
         json_str = '[{"name":"Yash"},{"name":"Ali"}]'
         packed = pack(json_str)
         assert "name" in packed
@@ -258,33 +258,24 @@ class TestEdgeCases:
         assert result[0]["name"] == "Yash"
 
     def test_plain_string_passthrough(self):
-        """Non-JSON strings pass through unchanged."""
         assert pack("Hello world") == "Hello world"
 
     def test_non_dict_array_fallback(self):
-        """Array of non-dicts → JSON fallback."""
         data = [1, 2, 3, 4, 5]
-        packed = pack(data)
-        assert packed == "[1,2,3,4,5]"
+        assert pack(data) == "[1,2,3,4,5]"
 
     def test_mixed_array_fallback(self):
-        """Array of mixed types → JSON fallback."""
         data = [{"name": "Yash"}, 42, "hello"]
-        packed = pack(data)
-        assert packed.startswith("[")
+        assert pack(data).startswith("[")
 
     def test_deeply_dissimilar_objects_fallback(self):
-        """Objects with zero shared keys → JSON fallback."""
         data = [
             {"a": 1, "b": 2, "c": 3, "d": 4},
             {"x": 1, "y": 2, "z": 3, "w": 4},
         ]
-        packed = pack(data)
-        # Zero overlap → should fall back to JSON
-        assert packed.startswith("[")
+        assert pack(data).startswith("[")
 
     def test_large_dataset(self):
-        """100 rows should pack and unpack correctly."""
         data = [{"id": i, "name": f"User{i}", "score": i * 1.5} for i in range(100)]
         packed = pack(data)
         result = unpack(packed)
@@ -293,15 +284,124 @@ class TestEdgeCases:
         assert result[99]["name"] == "User99"
         assert result[50]["score"] == 75.0
 
-    def test_value_looks_like_number_but_is_string(self):
-        """Zip codes like '10001' — will be parsed as number on unpack.
-        This is a known limitation documented in README."""
-        data = [{"name": "Yash", "zip": "10001"}]
+
+# =========================================================================
+# Typed mode: safe round-tripping with #types and \N nulls
+# =========================================================================
+
+class TestTypedMode:
+    """pack(typed=True) enables safe round-tripping."""
+
+    def test_string_true_preserved(self):
+        """String 'true' must NOT become boolean in typed mode."""
+        data = [{"name": "Yash", "status": "true"}, {"name": "Ali", "status": "active"}]
+        packed = pack(data, typed=True)
+        result = unpack(packed)
+        assert result[0]["status"] == "true"
+        assert isinstance(result[0]["status"], str)
+
+    def test_numeric_string_preserved(self):
+        """Phone numbers stay as strings in typed mode."""
+        data = [{"name": "Yash", "phone": "5551234567"}, {"name": "Ali", "phone": "5559876543"}]
+        packed = pack(data, typed=True)
+        result = unpack(packed)
+        assert result[0]["phone"] == "5551234567"
+        assert isinstance(result[0]["phone"], str)
+
+    def test_zip_code_preserved(self):
+        data = [
+            {"name": "Yash", "address": {"city": "NYC", "zip": "10001"}},
+            {"name": "Ali", "address": {"city": "LA", "zip": "90001"}},
+        ]
+        packed = pack(data, typed=True)
+        result = unpack(packed)
+        assert result[0]["address"]["zip"] == "10001"
+        assert isinstance(result[0]["address"]["zip"], str)
+
+    def test_pipe_in_string_preserved(self):
+        """String containing | must NOT become array in typed mode."""
+        data = [{"name": "Yash", "note": "yes|no"}, {"name": "Ali", "note": "maybe"}]
+        packed = pack(data, typed=True)
+        result = unpack(packed)
+        assert result[0]["note"] == "yes|no"
+        assert isinstance(result[0]["note"], str)
+
+    def test_pipe_in_array_element_preserved(self):
+        """Array elements containing | must round-trip in typed mode."""
+        data = [
+            {"name": "Yash", "tags": ["yes|no", "maybe"]},
+            {"name": "Ali", "tags": ["ok"]},
+        ]
+        packed = pack(data, typed=True)
+        result = unpack(packed)
+        assert result[0]["tags"] == ["yes|no", "maybe"]
+
+    def test_dot_in_key_name_preserved(self):
+        """Key 'config.name' must NOT become nested in typed mode."""
+        data = [
+            {"version": "1.0", "config.name": "prod"},
+            {"version": "2.0", "config.name": "staging"},
+        ]
+        packed = pack(data, typed=True)
+        result = unpack(packed)
+        assert "config.name" in result[0]
+        assert result[0]["config.name"] == "prod"
+
+    def test_null_vs_empty_string_distinguished(self):
+        """Typed mode can distinguish null from empty string."""
+        data = [
+            {"name": "Yash", "bio": ""},
+            {"name": "Ali", "bio": None},
+        ]
+        packed = pack(data, typed=True)
+        assert "\\N" in packed  # Null sentinel
+        result = unpack(packed)
+        assert result[0]["bio"] == ""   # Empty string preserved
+        assert result[1]["bio"] is None  # Null preserved
+
+    def test_backslash_in_values(self):
+        data = [
+            {"name": "Yash", "path": "C:\\Users\\yash"},
+            {"name": "Ali", "path": "C:\\Users\\ali"},
+        ]
+        packed = pack(data, typed=True)
+        result = unpack(packed)
+        assert result[0]["path"] == "C:\\Users\\yash"
+
+    def test_mixed_nesting_and_dot_keys(self):
+        data = [
+            {"name": "Yash", "address": {"city": "NYC"}, "meta.version": "1.0"},
+            {"name": "Ali", "address": {"city": "LA"}, "meta.version": "2.0"},
+        ]
+        packed = pack(data, typed=True)
+        result = unpack(packed)
+        assert result[0]["address"]["city"] == "NYC"
+        assert result[0]["meta.version"] == "1.0"
+
+
+# =========================================================================
+# Untyped mode: auto-detect has known limitations (documented)
+# =========================================================================
+
+class TestUntypedLimitations:
+    """These are KNOWN limitations of default (untyped) mode, documented in README."""
+
+    def test_numeric_string_becomes_number(self):
+        """Without types, '10001' unpacks as int. Use typed=True for strings."""
+        data = [{"name": "Yash", "zip": "10001"}, {"name": "Ali", "zip": "90210"}]
+        packed = pack(data)  # default, no types
+        result = unpack(packed)
+        # Known: "10001" → 10001 (auto-detect guesses number)
+        assert result[0]["zip"] in ("10001", 10001)
+
+    def test_empty_string_becomes_null(self):
+        """Without types, empty string and null are indistinguishable."""
+        data = [{"name": "Yash", "bio": ""}, {"name": "Ali", "bio": None}]
         packed = pack(data)
         result = unpack(packed)
-        # Known: "10001" round-trips as 10001 (int)
-        # Acceptable for LLM use — the LLM understands either way
-        assert result[0]["zip"] in ("10001", 10001)
+        # Both become None in untyped mode
+        assert result[0]["bio"] is None
+        assert result[1]["bio"] is None
 
 
 # =========================================================================
@@ -348,7 +448,6 @@ class TestEstimateSavings:
 class TestUnpack:
 
     def test_unpack_json(self):
-        """unpack should handle JSON strings too."""
         result = unpack('[{"name":"Yash"}]')
         assert result == [{"name": "Yash"}]
 
@@ -358,6 +457,20 @@ class TestUnpack:
     def test_unpack_json_object(self):
         result = unpack('{"name":"Yash"}')
         assert result == {"name": "Yash"}
+
+    def test_unpack_csv_without_type_hints(self):
+        """Plain CSV (no #types) uses auto-detect."""
+        csv_text = "name,role\nYash,Eng\nAli,Des"
+        result = unpack(csv_text)
+        assert result[0]["name"] == "Yash"
+        assert result[1]["role"] == "Des"
+
+    def test_unpack_csv_with_type_hints(self):
+        """CSV with #types row uses safe parsing."""
+        csv_text = "name,zip\n#s,s\nYash,10001\nAli,90210"
+        result = unpack(csv_text)
+        assert result[0]["zip"] == "10001"  # String, not int
+        assert isinstance(result[0]["zip"], str)
 
 
 if __name__ == "__main__":

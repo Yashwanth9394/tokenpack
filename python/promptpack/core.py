@@ -7,12 +7,31 @@ from typing import Any
 
 
 # ---------------------------------------------------------------------------
+# Marker type for pipe-joined arrays
+# ---------------------------------------------------------------------------
+
+
+class _PipeJoined(str):
+    """String subclass marking a value that came from pipe-joining an array."""
+    pass
+
+
+# Null sentinel for typed mode (distinguishes null from empty string)
+_NULL = "\\N"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
-def pack(data: Any) -> str:
+def pack(data: Any, *, typed: bool = False) -> str:
     """Convert JSON-compatible data to the most token-efficient text format.
+
+    Args:
+        data: JSON-compatible Python data (list/dict/str).
+        typed: If True, include a ``#types`` row and ``\\N`` null markers
+               for safe round-tripping. Default False outputs pure CSV.
 
     - Array of similar objects → CSV with dot-flattened headers
     - Everything else → compact JSON (not worth converting)
@@ -26,7 +45,7 @@ def pack(data: Any) -> str:
             return data
 
     if isinstance(data, list) and len(data) >= 2 and _is_packable_array(data):
-        return _to_csv(data)
+        return _to_csv(data, typed=typed)
 
     # Not worth packing — return compact JSON
     return json.dumps(data, separators=(",", ":"))
@@ -36,7 +55,8 @@ def unpack(text: str) -> Any:
     """Convert packed text back to JSON-compatible Python objects.
 
     Detects whether *text* is CSV (produced by ``pack``) or plain JSON
-    and returns the appropriate Python structure.
+    and returns the appropriate Python structure.  Automatically detects
+    the ``#types`` row if present and uses it for safe parsing.
     """
     text = text.strip()
     if not text:
@@ -62,7 +82,7 @@ def pack_for_prompt(message: str, data: Any) -> str:
 
 
 def estimate_savings(data: Any) -> dict:
-    """Return a dict with token-count estimates (requires tiktoken).
+    """Return a dict with token-count estimates.
 
     Keys: json_chars, packed_chars, char_savings_pct, format_used
     """
@@ -108,7 +128,6 @@ def _is_packable_array(data: list) -> bool:
         return False
 
     # Check key overlap: rows must share at least 30 % of keys with each other
-    # and at least 30% of the superset must be covered per row
     threshold = max(len(all_keys) * 0.3, 1)
     shared_keys = set.intersection(*(set(item.keys()) for item in data))
     if len(shared_keys) == 0:
@@ -121,12 +140,68 @@ def _is_packable_array(data: list) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Internal: JSON → CSV conversion
+# Internal: key escaping for dot-notation
 # ---------------------------------------------------------------------------
 
-# Sentinel used inside pipe-joined arrays so a literal "|" in a value
-# survives the round-trip.
-_PIPE_ESCAPE = "\\|"
+
+def _escape_key(key: str) -> str:
+    """Escape backslashes and dots in a key name so dots aren't confused with nesting."""
+    return key.replace("\\", "\\\\").replace(".", "\\.")
+
+
+def _split_dotted_key(key: str) -> list[str]:
+    """Split a key on unescaped dots, handling escaped dots and backslashes."""
+    parts: list[str] = []
+    current: list[str] = []
+    i = 0
+    while i < len(key):
+        if key[i] == '\\' and i + 1 < len(key):
+            current.append(key[i + 1])
+            i += 2
+        elif key[i] == '.':
+            parts.append(''.join(current))
+            current = []
+            i += 1
+        else:
+            current.append(key[i])
+            i += 1
+    parts.append(''.join(current))
+    return parts
+
+
+# ---------------------------------------------------------------------------
+# Internal: pipe escaping for array values
+# ---------------------------------------------------------------------------
+
+
+def _escape_pipe(s: str) -> str:
+    """Escape backslashes and pipes in an array element."""
+    return s.replace("\\", "\\\\").replace("|", "\\|")
+
+
+def _split_pipe_joined(raw: str) -> list[str]:
+    """Split on unescaped pipe characters, handling escaped pipes and backslashes."""
+    parts: list[str] = []
+    current: list[str] = []
+    i = 0
+    while i < len(raw):
+        if raw[i] == '\\' and i + 1 < len(raw):
+            current.append(raw[i + 1])
+            i += 2
+        elif raw[i] == '|':
+            parts.append(''.join(current))
+            current = []
+            i += 1
+        else:
+            current.append(raw[i])
+            i += 1
+    parts.append(''.join(current))
+    return parts
+
+
+# ---------------------------------------------------------------------------
+# Internal: JSON → CSV conversion
+# ---------------------------------------------------------------------------
 
 
 def _flatten_value(value: Any, prefix: str = "") -> dict[str, Any]:
@@ -139,15 +214,16 @@ def _flatten_value(value: Any, prefix: str = "") -> dict[str, Any]:
     if isinstance(value, dict):
         out: dict[str, Any] = {}
         for k, v in value.items():
-            full_key = f"{prefix}{k}" if not prefix else f"{prefix}.{k}"
+            escaped_k = _escape_key(k)
+            full_key = f"{prefix}.{escaped_k}" if prefix else escaped_k
             out.update(_flatten_value(v, full_key))
         return out
 
     if isinstance(value, list):
-        # Array of primitives → pipe-join
+        # Array of primitives → pipe-join with escaping
         if all(_is_primitive(v) for v in value):
-            joined = "|".join(_prim_to_str(v) for v in value)
-            return {prefix: joined}
+            joined = "|".join(_escape_pipe(_prim_to_str(v)) for v in value)
+            return {prefix: _PipeJoined(joined)}
         # Array of objects → JSON fallback for this cell
         return {prefix: json.dumps(value, separators=(",", ":"))}
 
@@ -158,12 +234,59 @@ def _flatten_row(row: dict) -> dict[str, Any]:
     """Flatten one row, handling nested dicts and arrays."""
     flat: dict[str, Any] = {}
     for key, value in row.items():
-        flat.update(_flatten_value(value, key))
+        escaped_key = _escape_key(key)
+        flat.update(_flatten_value(value, escaped_key))
     return flat
 
 
-def _to_csv(data: list[dict]) -> str:
-    """Convert a list of dicts to CSV with smart flattening."""
+def _detect_column_type(flat_rows: list[dict], header: str) -> str:
+    """Detect the type code for a column based on Python types of values.
+
+    Type codes: s=string, n=number, b=bool, a=pipe-array, j=json-blob, x=mixed
+    """
+    vals = [row[header] for row in flat_rows if header in row and row[header] is not None]
+    if not vals:
+        return "x"
+
+    # Check for pipe-joined arrays first
+    if any(isinstance(v, _PipeJoined) for v in vals):
+        return "a"
+
+    types_seen: set[str] = set()
+    for v in vals:
+        if isinstance(v, bool):
+            types_seen.add("b")
+        elif isinstance(v, (int, float)):
+            types_seen.add("n")
+        elif isinstance(v, str):
+            # Check if this is a JSON blob
+            if v and v[0] in ("{", "["):
+                try:
+                    json.loads(v)
+                    types_seen.add("j")
+                    continue
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            types_seen.add("s")
+        else:
+            types_seen.add("x")
+
+    if len(types_seen) == 1:
+        return types_seen.pop()
+
+    # Mixed types — if strings are present, use string (safest)
+    if "s" in types_seen:
+        return "s"
+
+    return "x"
+
+
+def _to_csv(data: list[dict], *, typed: bool = False) -> str:
+    """Convert a list of dicts to CSV with smart flattening.
+
+    Args:
+        typed: If True, include a #types row and use \\N for null values.
+    """
     # Flatten all rows
     flat_rows = [_flatten_row(row) for row in data]
 
@@ -179,16 +302,22 @@ def _to_csv(data: list[dict]) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(headers)
+
+    if typed:
+        # Detect column types and write type hints row
+        col_types = [_detect_column_type(flat_rows, h) for h in headers]
+        buf.write("#" + ",".join(col_types) + "\n")
+
     for row in flat_rows:
-        writer.writerow([_format_cell(row.get(k)) for k in headers])
+        writer.writerow([_format_cell(row.get(k), typed=typed) for k in headers])
 
     return buf.getvalue().rstrip("\n")
 
 
-def _format_cell(value: Any) -> str:
+def _format_cell(value: Any, *, typed: bool = False) -> str:
     """Convert a single cell value to its CSV string representation."""
     if value is None:
-        return ""
+        return _NULL if typed else ""
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, (int, float)):
@@ -214,29 +343,76 @@ def _from_csv(text: str) -> list[dict]:
     except StopIteration:
         return []
 
+    # Check for type hints row
+    col_types: list[str] | None = None
+    typed_mode = False
+    first_data_row = None
+    try:
+        maybe_types = next(reader)
+        if maybe_types and maybe_types[0].startswith("#"):
+            # Type hints: csv.reader splits "#s,n,a,b" into ["#s", "n", "a", "b"]
+            col_types = [maybe_types[0][1:]] + list(maybe_types[1:])
+            typed_mode = True
+        else:
+            first_data_row = maybe_types
+    except StopIteration:
+        return []
+
     rows: list[dict] = []
-    for csv_row in reader:
+
+    def _process_row(csv_row: list[str]) -> None:
         if not csv_row or all(c == "" for c in csv_row):
-            continue
+            return
         flat: dict[str, Any] = {}
         for i, header in enumerate(headers):
             raw = csv_row[i] if i < len(csv_row) else ""
-            flat[header] = _parse_cell(raw, header)
-
-        # Unflatten dot-notation keys back into nested dicts
+            t = col_types[i] if col_types and i < len(col_types) else None
+            flat[header] = _parse_cell(raw, t, typed_mode=typed_mode)
         nested = _unflatten(flat)
         rows.append(nested)
+
+    if first_data_row is not None:
+        _process_row(first_data_row)
+
+    for csv_row in reader:
+        _process_row(csv_row)
 
     return rows
 
 
-def _parse_cell(raw: str, header: str = "") -> Any:
+def _parse_cell(raw: str, type_hint: str | None = None, *,
+                typed_mode: bool = False) -> Any:
     """Parse a raw CSV cell back to a Python value."""
-    # Empty → None
-    if raw == "":
+    # Null sentinel (typed mode)
+    if raw == _NULL and typed_mode:
         return None
 
-    # Booleans
+    # Empty cell
+    if raw == "":
+        if typed_mode:
+            return ""  # In typed mode, empty = empty string, \N = null
+        return None     # In untyped mode, empty = null (best guess)
+
+    # If we have a type hint, use it for safe parsing
+    if type_hint == "s":
+        return raw  # Always return as string — never auto-parse
+    if type_hint == "b":
+        return raw == "true"
+    if type_hint == "n":
+        try:
+            return float(raw) if "." in raw else int(raw)
+        except ValueError:
+            return raw
+    if type_hint == "a":
+        parts = _split_pipe_joined(raw)
+        return [_parse_array_element(p) for p in parts]
+    if type_hint == "j":
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return raw
+
+    # No type hint — auto-detect (backward compat with plain CSV)
     if raw == "true":
         return True
     if raw == "false":
@@ -267,10 +443,13 @@ def _parse_cell(raw: str, header: str = "") -> Any:
 
 
 def _unflatten(flat: dict[str, Any]) -> dict:
-    """Convert ``{"a.b.c": 1}`` back to ``{"a": {"b": {"c": 1}}}``."""
+    """Convert ``{"a.b.c": 1}`` back to ``{"a": {"b": {"c": 1}}}``.
+
+    Handles escaped dots in key names (``a\\.b`` stays as key ``a.b``).
+    """
     result: dict = {}
     for key, value in flat.items():
-        parts = key.split(".")
+        parts = _split_dotted_key(key)
         current = result
         for part in parts[:-1]:
             if part not in current or not isinstance(current[part], dict):
@@ -283,6 +462,20 @@ def _unflatten(flat: dict[str, Any]) -> dict:
 # ---------------------------------------------------------------------------
 # Internal: helpers
 # ---------------------------------------------------------------------------
+
+
+def _parse_array_element(raw: str) -> Any:
+    """Parse a single element from a pipe-joined array (no pipe detection)."""
+    if raw == "":
+        return None
+    if raw == "true":
+        return True
+    if raw == "false":
+        return False
+    try:
+        return float(raw) if "." in raw else int(raw)
+    except ValueError:
+        return raw
 
 
 def _is_primitive(value: Any) -> bool:
