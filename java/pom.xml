@@ -4,14 +4,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.promptpack</groupId>
-    <artifactId>promptpack</artifactId>
+    <groupId>com.tokenpack</groupId>
+    <artifactId>tokenpack</artifactId>
     <version>0.1.0</version>
     <packaging>jar</packaging>
 
-    <name>promptpack</name>
+    <name>tokenpack</name>
     <description>Pack JSON data into token-efficient CSV for LLM prompts. Save 40-62% on input tokens.</description>
-    <url>https://github.com/Yashwanth9394/promptpack</url>
+    <url>https://github.com/Yashwanth9394/tokenpack</url>
 
     <licenses>
         <license>

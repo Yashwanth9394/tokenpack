@@ -1,4 +1,4 @@
-package promptpack
+package tokenpack
 
 import (
 	"encoding/json"

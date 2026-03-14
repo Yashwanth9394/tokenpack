@@ -1,6 +1,6 @@
 """One-line wrappers for OpenAI and Anthropic SDK calls with auto-packing."""
 
-from promptpack.core import pack
+from tokenpack.core import pack
 from typing import Any
 
 
@@ -9,7 +9,7 @@ def openai_pack(client: Any, message: str, data: Any, model: str = "gpt-4o", **k
 
     Usage:
         from openai import OpenAI
-        from promptpack.wrappers import openai_pack
+        from tokenpack.wrappers import openai_pack
 
         client = OpenAI()
         response = openai_pack(client, "Analyze this:", my_data)
@@ -30,7 +30,7 @@ def anthropic_pack(client: Any, message: str, data: Any, model: str = "claude-so
 
     Usage:
         import anthropic
-        from promptpack.wrappers import anthropic_pack
+        from tokenpack.wrappers import anthropic_pack
 
         client = anthropic.Anthropic()
         response = anthropic_pack(client, "Analyze this:", my_data)

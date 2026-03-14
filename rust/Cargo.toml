@@ -1,5 +1,5 @@
 [package]
-name = "promptpack"
+name = "tokenpack"
 version = "0.1.0"
 edition = "2021"
 description = "Convert JSON arrays of objects into CSV format to save LLM tokens"

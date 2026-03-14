@@ -1,11 +1,11 @@
 {
-    "name": "yashwanth/promptpack",
+    "name": "yashwanth/tokenpack",
     "description": "Pack JSON data into token-efficient CSV for LLM prompts",
     "type": "library",
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "PromptPack\\": "src/"
+            "TokenPack\\": "src/"
         }
     },
     "require": {

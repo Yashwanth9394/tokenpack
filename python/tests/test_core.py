@@ -1,8 +1,8 @@
-"""Comprehensive tests for promptpack — every edge case covered."""
+"""Comprehensive tests for tokenpack — every edge case covered."""
 
 import json
 import pytest
-from promptpack import pack, unpack, pack_for_prompt, estimate_savings
+from tokenpack import pack, unpack, pack_for_prompt, estimate_savings
 
 
 # =========================================================================

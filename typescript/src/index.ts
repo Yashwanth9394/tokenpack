@@ -1,8 +1,8 @@
 /**
- * promptpack - Pack JSON data into token-efficient CSV for LLM prompts.
+ * tokenpack - Pack JSON data into token-efficient CSV for LLM prompts.
  *
  * Usage:
- *   import { pack, unpack, packForPrompt } from 'promptpack';
+ *   import { pack, unpack, packForPrompt } from 'tokenpack';
  *
  *   const csv = pack(myJsonData);              // JSON → pure CSV (fewer tokens)
  *   const json = unpack(csv);                  // CSV → JSON (back to original)

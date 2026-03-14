@@ -1,4 +1,4 @@
-# promptpack
+# tokenpack
 
 Pack JSON data into token-efficient formats for LLM prompts. **Save 37-47% on input tokens** with zero learning curve.
 
@@ -10,37 +10,37 @@ JSON (115 tokens)                         CSV (66 tokens) — 43% savings
 "active":true},{"name":"Ali Khan"...      Ali Khan,Designer,Los Angeles,120000,false
 ```
 
-promptpack auto-detects your data shape, converts JSON arrays to CSV (which every LLM already understands), handles nested objects with dot-flattening, and falls back to JSON for anything it can't safely convert.
+tokenpack auto-detects your data shape, converts JSON arrays to CSV (which every LLM already understands), handles nested objects with dot-flattening, and falls back to JSON for anything it can't safely convert.
 
 ## Install
 
 ```bash
-pip install promptpack          # Python
-npm install promptpack          # Node.js / TypeScript
-gem install promptpack          # Ruby
-composer require yashwanth/promptpack  # PHP
-go get github.com/Yashwanth9394/promptpack/go  # Go
-cargo add promptpack            # Rust
-dotnet add package PromptPack   # C# / .NET
+pip install tokenpack          # Python
+npm install tokenpack          # Node.js / TypeScript
+gem install tokenpack          # Ruby
+composer require yashwanth/tokenpack  # PHP
+go get github.com/Yashwanth9394/tokenpack/go  # Go
+cargo add tokenpack            # Rust
+dotnet add package TokenPack   # C# / .NET
 ```
 
 ```xml
 <!-- Java (Maven) -->
 <dependency>
-    <groupId>com.promptpack</groupId>
-    <artifactId>promptpack</artifactId>
+    <groupId>com.tokenpack</groupId>
+    <artifactId>tokenpack</artifactId>
     <version>0.1.0</version>
 </dependency>
 ```
 
 ```kotlin
 // Kotlin (Gradle)
-implementation("com.promptpack:promptpack:0.1.0")
+implementation("com.tokenpack:tokenpack:0.1.0")
 ```
 
 ```swift
 // Swift (Package.swift)
-.package(url: "https://github.com/Yashwanth9394/promptpack", from: "0.1.0")
+.package(url: "https://github.com/Yashwanth9394/tokenpack", from: "0.1.0")
 ```
 
 ## Usage
@@ -48,7 +48,7 @@ implementation("com.promptpack:promptpack:0.1.0")
 ### Python
 
 ```python
-from promptpack import pack, unpack
+from tokenpack import pack, unpack
 
 data = [
     {"name": "Yash P", "role": "Senior Eng", "city": "New York", "salary": 150000},
@@ -75,7 +75,7 @@ prompt = f"Analyze these employees:\n{packed}"
 
 ```python
 from openai import OpenAI
-from promptpack import pack
+from tokenpack import pack
 
 client = OpenAI()
 packed = pack(my_large_dataset)  # 46% fewer tokens
@@ -90,7 +90,7 @@ response = client.chat.completions.create(
 
 ```python
 import anthropic
-from promptpack import pack
+from tokenpack import pack
 
 client = anthropic.Anthropic()
 packed = pack(my_large_dataset)  # 46% fewer tokens
@@ -105,7 +105,7 @@ response = client.messages.create(
 ### Node.js / TypeScript
 
 ```typescript
-import { pack, unpack, packForPrompt } from 'promptpack';
+import { pack, unpack, packForPrompt } from 'tokenpack';
 
 const data = [
   { name: "Yash P", role: "Senior Eng", city: "New York", salary: 150000 },
@@ -122,15 +122,15 @@ const prompt = packForPrompt("Analyze these employees:", data);
 ### Java
 
 ```java
-import com.promptpack.PromptPack;
+import com.tokenpack.TokenPack;
 
 String json = "[{\"name\":\"Yash\",\"role\":\"Eng\"},{\"name\":\"Ali\",\"role\":\"Des\"}]";
 
-String packed = PromptPack.pack(json);              // JSON → CSV
-JsonArray original = PromptPack.unpack(packed);      // CSV → JSON
+String packed = TokenPack.pack(json);              // JSON → CSV
+JsonArray original = TokenPack.unpack(packed);      // CSV → JSON
 
 // 1-line integration with any LLM SDK:
-var response = PromptPack.withPacked("Analyze:", json, content ->
+var response = TokenPack.withPacked("Analyze:", json, content ->
     client.chat().completions().create(
         ChatCompletionCreateParams.builder()
             .model(ChatModel.GPT_4O)
@@ -143,22 +143,22 @@ var response = PromptPack.withPacked("Analyze:", json, content ->
 ### Go
 
 ```go
-import "github.com/Yashwanth9394/promptpack/go"
+import "github.com/Yashwanth9394/tokenpack/go"
 
 data := []map[string]interface{}{
     {"name": "Yash", "role": "Eng"},
     {"name": "Ali", "role": "Des"},
 }
 
-packed := promptpack.Pack(data)          // JSON → CSV
-original := promptpack.Unpack(packed)    // CSV → JSON
-prompt := promptpack.PackForPrompt("Analyze:", data)
+packed := tokenpack.Pack(data)          // JSON → CSV
+original := tokenpack.Unpack(packed)    // CSV → JSON
+prompt := tokenpack.PackForPrompt("Analyze:", data)
 ```
 
 ### Rust
 
 ```rust
-use promptpack::{pack, unpack};
+use tokenpack::{pack, unpack};
 use serde_json::json;
 
 let data = json!([{"name": "Yash", "role": "Eng"}, {"name": "Ali", "role": "Des"}]);
@@ -170,54 +170,54 @@ let original = unpack(&packed);          // CSV → JSON
 ### C# / .NET
 
 ```csharp
-using PromptPack;
+using TokenPack;
 
 string json = "[{\"name\":\"Yash\",\"role\":\"Eng\"},{\"name\":\"Ali\",\"role\":\"Des\"}]";
 
-string packed = PromptPack.Pack(json);
-JsonElement original = PromptPack.Unpack(packed);
+string packed = TokenPack.Pack(json);
+JsonElement original = TokenPack.Unpack(packed);
 ```
 
 ### Ruby
 
 ```ruby
-require 'promptpack'
+require 'tokenpack'
 
 data = [{ "name" => "Yash", "role" => "Eng" }, { "name" => "Ali", "role" => "Des" }]
 
-packed = PromptPack.pack(data)           # JSON → CSV
-original = PromptPack.unpack(packed)     # CSV → JSON
+packed = TokenPack.pack(data)           # JSON → CSV
+original = TokenPack.unpack(packed)     # CSV → JSON
 ```
 
 ### PHP
 
 ```php
-use PromptPack\PromptPack;
+use TokenPack\TokenPack;
 
 $data = [["name" => "Yash", "role" => "Eng"], ["name" => "Ali", "role" => "Des"]];
 
-$packed = PromptPack::pack($data);       // JSON → CSV
-$original = PromptPack::unpack($packed); // CSV → JSON
+$packed = TokenPack::pack($data);       // JSON → CSV
+$original = TokenPack::unpack($packed); // CSV → JSON
 ```
 
 ### Kotlin
 
 ```kotlin
-import com.promptpack.PromptPack
+import com.tokenpack.TokenPack
 
-val packed = PromptPack.pack("""[{"name":"Yash","role":"Eng"},{"name":"Ali","role":"Des"}]""")
-val original = PromptPack.unpack(packed)
+val packed = TokenPack.pack("""[{"name":"Yash","role":"Eng"},{"name":"Ali","role":"Des"}]""")
+val original = TokenPack.unpack(packed)
 ```
 
 ### Swift
 
 ```swift
-import PromptPack
+import TokenPack
 
 let data: [[String: Any]] = [["name": "Yash", "role": "Eng"], ["name": "Ali", "role": "Des"]]
 
-let packed = PromptPack.pack(data)       // JSON → CSV
-let original = PromptPack.unpack(packed) // CSV → JSON
+let packed = TokenPack.pack(data)       // JSON → CSV
+let original = TokenPack.unpack(packed) // CSV → JSON
 ```
 
 ## Benchmarks
@@ -252,7 +252,7 @@ The bigger value: **fitting more data into the context window**. Converting 50K 
 
 ## How It Works
 
-promptpack looks at your data and picks the best strategy:
+tokenpack looks at your data and picks the best strategy:
 
 | Data shape | Strategy | Savings |
 |-----------|----------|---------|
@@ -319,7 +319,7 @@ pack_for_prompt(msg, data)           # Combine message + packed data
 estimate_savings(data)               # Get savings estimate dict
 
 # 1-line SDK wrappers
-from promptpack.wrappers import openai_pack, anthropic_pack
+from tokenpack.wrappers import openai_pack, anthropic_pack
 openai_pack(client, msg, data)       # Auto-pack + send to OpenAI
 anthropic_pack(client, msg, data)    # Auto-pack + send to Anthropic
 ```
@@ -340,11 +340,11 @@ anthropicPack(client, message, data): Promise<unknown>
 ### Java
 
 ```java
-PromptPack.pack(String json): String
-PromptPack.pack(JsonElement element): String
-PromptPack.unpack(String text): JsonArray
-PromptPack.packForPrompt(String message, String json): String
-PromptPack.withPacked(String message, String json, Function<String, T> caller): T  // 1-line SDK wrapper
+TokenPack.pack(String json): String
+TokenPack.pack(JsonElement element): String
+TokenPack.unpack(String text): JsonArray
+TokenPack.packForPrompt(String message, String json): String
+TokenPack.withPacked(String message, String json, Function<String, T> caller): T  // 1-line SDK wrapper
 ```
 
 ## Supported Languages
@@ -365,31 +365,31 @@ PromptPack.withPacked(String message, String json, Function<String, T> caller): 
 ## Project Structure
 
 ```
-promptpack/
-├── python/                 # pip install promptpack
-│   ├── promptpack/
+tokenpack/
+├── python/                 # pip install tokenpack
+│   ├── tokenpack/
 │   │   ├── core.py         # Core pack/unpack logic
 │   │   └── wrappers.py     # OpenAI/Anthropic 1-line wrappers
 │   └── tests/test_core.py  # 37 tests covering all edge cases
-├── typescript/             # npm install promptpack
+├── typescript/             # npm install tokenpack
 │   └── src/index.ts
 ├── java/                   # Maven
-│   └── src/.../PromptPack.java
+│   └── src/.../TokenPack.java
 ├── go/                     # go get
-│   ├── promptpack.go
-│   └── promptpack_test.go  # 16 tests
-├── rust/                   # cargo add promptpack
+│   ├── tokenpack.go
+│   └── tokenpack_test.go  # 16 tests
+├── rust/                   # cargo add tokenpack
 │   └── src/lib.rs          # 12 tests
-├── csharp/                 # dotnet add package PromptPack
-│   └── PromptPack.cs
-├── ruby/                   # gem install promptpack
-│   └── lib/promptpack.rb
+├── csharp/                 # dotnet add package TokenPack
+│   └── TokenPack.cs
+├── ruby/                   # gem install tokenpack
+│   └── lib/tokenpack.rb
 ├── php/                    # composer require
-│   └── src/PromptPack.php
+│   └── src/TokenPack.php
 ├── kotlin/                 # Gradle
-│   └── src/.../PromptPack.kt
+│   └── src/.../TokenPack.kt
 ├── swift/                  # SwiftPM
-│   └── Sources/PromptPack/PromptPack.swift
+│   └── Sources/TokenPack/TokenPack.swift
 ├── benchmarks/
 │   └── benchmark.py
 └── README.md
@@ -412,4 +412,4 @@ MIT
 
 ## Contributing
 
-Issues and PRs welcome at [github.com/Yashwanth9394/promptpack](https://github.com/Yashwanth9394/promptpack)
+Issues and PRs welcome at [github.com/Yashwanth9394/tokenpack](https://github.com/Yashwanth9394/tokenpack)

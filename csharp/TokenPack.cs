@@ -3,12 +3,12 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace PromptPack;
+namespace TokenPack;
 
 /// <summary>
 /// Converts JSON arrays of objects into token-efficient CSV for LLM prompts.
 /// </summary>
-public static class PromptPack
+public static class TokenPack
 {
     // -----------------------------------------------------------------------
     // Public API

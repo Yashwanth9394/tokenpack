@@ -1,4 +1,4 @@
-package com.promptpack;
+package com.tokenpack;
 
 import com.google.gson.*;
 
@@ -7,24 +7,24 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * PromptPack - Pack JSON data into token-efficient CSV for LLM prompts.
+ * TokenPack - Pack JSON data into token-efficient CSV for LLM prompts.
  *
  * <pre>
- * String csv = PromptPack.pack(jsonArray);       // JSON → CSV (fewer tokens)
- * JsonArray arr = PromptPack.unpack(csv);         // CSV → JSON (back to original)
- * String prompt = PromptPack.packForPrompt("Analyze:", jsonArray);
+ * String csv = TokenPack.pack(jsonArray);       // JSON → CSV (fewer tokens)
+ * JsonArray arr = TokenPack.unpack(csv);         // CSV → JSON (back to original)
+ * String prompt = TokenPack.packForPrompt("Analyze:", jsonArray);
  *
  * // 1-line integration with any LLM SDK:
- * var response = PromptPack.withPacked("Analyze:", data, content -&gt;
+ * var response = TokenPack.withPacked("Analyze:", data, content -&gt;
  *     client.chat().completions().create(params.addUserMessage(content).build())
  * );
  * </pre>
  */
-public final class PromptPack {
+public final class TokenPack {
 
     private static final Gson GSON = new Gson();
 
-    private PromptPack() {}
+    private TokenPack() {}
 
     // -----------------------------------------------------------------------
     // Public API
@@ -87,7 +87,7 @@ public final class PromptPack {
      *
      * <pre>
      * // OpenAI Java SDK:
-     * var response = PromptPack.withPacked("Analyze:", jsonData, content -&gt;
+     * var response = TokenPack.withPacked("Analyze:", jsonData, content -&gt;
      *     client.chat().completions().create(
      *         ChatCompletionCreateParams.builder()
      *             .model(ChatModel.GPT_4O)
@@ -97,7 +97,7 @@ public final class PromptPack {
      * );
      *
      * // Anthropic Java SDK:
-     * var response = PromptPack.withPacked("Analyze:", jsonData, content -&gt;
+     * var response = TokenPack.withPacked("Analyze:", jsonData, content -&gt;
      *     client.messages().create(
      *         MessageCreateParams.builder()
      *             .model(Model.CLAUDE_SONNET_4_20250514)
@@ -398,7 +398,7 @@ public final class PromptPack {
     }
 
     private static String csvLine(List<String> fields) {
-        return fields.stream().map(PromptPack::csvEscape).collect(Collectors.joining(","));
+        return fields.stream().map(TokenPack::csvEscape).collect(Collectors.joining(","));
     }
 
     private static String csvEscape(String value) {

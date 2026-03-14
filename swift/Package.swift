@@ -3,21 +3,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "PromptPack",
+    name: "TokenPack",
     platforms: [
         .macOS(.v13),
         .iOS(.v16),
     ],
     products: [
         .library(
-            name: "PromptPack",
-            targets: ["PromptPack"]
+            name: "TokenPack",
+            targets: ["TokenPack"]
         ),
     ],
     targets: [
         .target(
-            name: "PromptPack",
-            path: "Sources/PromptPack"
+            name: "TokenPack",
+            path: "Sources/TokenPack"
         ),
     ]
 )

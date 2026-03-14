@@ -1,19 +1,19 @@
-package com.promptpack
+package com.tokenpack
 
 import com.google.gson.*
 import kotlin.math.floor
 import kotlin.math.max
 
 /**
- * PromptPack - Pack JSON data into token-efficient CSV for LLM prompts.
+ * TokenPack - Pack JSON data into token-efficient CSV for LLM prompts.
  *
  * ```
- * val csv = PromptPack.pack(jsonString)        // JSON -> CSV (fewer tokens)
- * val arr = PromptPack.unpack(csv)             // CSV -> JSON (back to original)
- * val prompt = PromptPack.packForPrompt("Analyze:", jsonString)
+ * val csv = TokenPack.pack(jsonString)        // JSON -> CSV (fewer tokens)
+ * val arr = TokenPack.unpack(csv)             // CSV -> JSON (back to original)
+ * val prompt = TokenPack.packForPrompt("Analyze:", jsonString)
  * ```
  */
-object PromptPack {
+object TokenPack {
 
     private val gson = Gson()
 

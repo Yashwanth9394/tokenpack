@@ -1,15 +1,15 @@
-/// PromptPack - Pack JSON data into token-efficient CSV for LLM prompts.
+/// TokenPack - Pack JSON data into token-efficient CSV for LLM prompts.
 ///
 /// Usage:
-///   let csv = PromptPack.pack(myData)        // JSON → CSV (fewer tokens)
-///   let json = PromptPack.unpack(csv)         // CSV → back to dicts
-///   let prompt = PromptPack.packForPrompt("Analyze:", data: myData)
+///   let csv = TokenPack.pack(myData)        // JSON → CSV (fewer tokens)
+///   let json = TokenPack.unpack(csv)         // CSV → back to dicts
+///   let prompt = TokenPack.packForPrompt("Analyze:", data: myData)
 
 import Foundation
 
 // MARK: - Public API
 
-public enum PromptPack {
+public enum TokenPack {
 
     /// Convert JSON-compatible data to the most token-efficient text format.
     ///

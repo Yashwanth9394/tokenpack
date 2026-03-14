@@ -1,18 +1,18 @@
 <?php
 
-namespace PromptPack;
+namespace TokenPack;
 
 /**
- * PromptPack - Pack JSON data into token-efficient CSV for LLM prompts.
+ * TokenPack - Pack JSON data into token-efficient CSV for LLM prompts.
  *
  * Usage:
- *   use PromptPack\PromptPack;
+ *   use TokenPack\TokenPack;
  *
- *   $csv   = PromptPack::pack($myData);            // Array/JSON → CSV (fewer tokens)
- *   $array = PromptPack::unpack($csv);              // CSV → PHP array
- *   $prompt = PromptPack::packForPrompt("Analyze:", $data);
+ *   $csv   = TokenPack::pack($myData);            // Array/JSON → CSV (fewer tokens)
+ *   $array = TokenPack::unpack($csv);              // CSV → PHP array
+ *   $prompt = TokenPack::packForPrompt("Analyze:", $data);
  */
-class PromptPack
+class TokenPack
 {
     // -----------------------------------------------------------------------
     // Public API

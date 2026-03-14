@@ -1,4 +1,4 @@
-"""Benchmark: promptpack vs JSON vs TOON token counts using tiktoken."""
+"""Benchmark: tokenpack vs JSON vs TOON token counts using tiktoken."""
 
 import json
 import sys
@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from promptpack import pack, estimate_savings
+from tokenpack import pack, estimate_savings
 
 try:
     import tiktoken
@@ -42,7 +42,7 @@ def benchmark(label: str, data: list[dict]):
 
 def main():
     print("=" * 60)
-    print("  promptpack Benchmark")
+    print("  tokenpack Benchmark")
     print("  Tokenizer: GPT-4o (tiktoken cl100k_base)")
     print("=" * 60)
 

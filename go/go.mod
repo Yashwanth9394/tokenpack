@@ -1,3 +1,3 @@
-module github.com/Yashwanth9394/promptpack/go
+module github.com/Yashwanth9394/tokenpack/go
 
 go 1.21

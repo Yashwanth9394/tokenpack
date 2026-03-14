@@ -1,5 +1,5 @@
 {
-  "name": "promptpack",
+  "name": "tokenpack",
   "version": "0.1.0",
   "description": "Pack JSON data into token-efficient CSV for LLM prompts. Save 40-62% on input tokens.",
   "main": "dist/index.js",
@@ -15,7 +15,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Yashwanth9394/promptpack"
+    "url": "https://github.com/Yashwanth9394/tokenpack"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

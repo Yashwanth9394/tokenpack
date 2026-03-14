@@ -1,7 +1,7 @@
 require "json"
 require "csv"
 
-module PromptPack
+module TokenPack
   module_function
 
   # Pack a Ruby hash/array or JSON string into a compact representation.

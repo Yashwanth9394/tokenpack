@@ -1,4 +1,4 @@
-"""Core pack/unpack logic for promptpack."""
+"""Core pack/unpack logic for tokenpack."""
 
 import csv
 import io

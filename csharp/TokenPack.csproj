@@ -2,11 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <PackageId>PromptPack</PackageId>
+    <PackageId>TokenPack</PackageId>
     <Version>0.1.0</Version>
     <Description>Pack JSON data into token-efficient CSV for LLM prompts.</Description>
-    <RootNamespace>PromptPack</RootNamespace>
-    <AssemblyName>PromptPack</AssemblyName>
+    <RootNamespace>TokenPack</RootNamespace>
+    <AssemblyName>TokenPack</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
